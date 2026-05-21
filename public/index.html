@@ -50,7 +50,17 @@
               </div>
             </div>
             <div class="editor-actions">
-              <span id="textMeta">0 Wörter</span>
+              <div class="file-actions">
+                <span id="textMeta">0 Wörter</span>
+                <button type="button" class="secondary-button" id="fileOpenButton">Datei öffnen</button>
+                <button type="button" class="secondary-button" id="fileSaveButton">Datei sichern</button>
+                <input
+                  type="file"
+                  id="fileInput"
+                  accept=".txt,.text,.md,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  hidden
+                />
+              </div>
               <button type="submit" id="analyzeButton">Analysieren</button>
             </div>
           </form>

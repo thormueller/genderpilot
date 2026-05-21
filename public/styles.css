@@ -299,6 +299,13 @@ textarea:focus {
   gap: 12px;
 }
 
+.file-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 button {
   border: 0;
   border-radius: 8px;
@@ -312,6 +319,19 @@ button {
   padding: 0 18px;
   background: var(--accent);
   color: #ffffff;
+}
+
+.secondary-button {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--accent-strong);
+}
+
+.secondary-button:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 #analyzeButton:hover {

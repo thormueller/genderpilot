@@ -3,6 +3,9 @@ const sourceText = document.querySelector("#sourceText");
 const sourceHighlights = document.querySelector("#sourceHighlights");
 const lineNumbers = document.querySelector("#lineNumbers");
 const textMeta = document.querySelector("#textMeta");
+const fileOpenButton = document.querySelector("#fileOpenButton");
+const fileSaveButton = document.querySelector("#fileSaveButton");
+const fileInput = document.querySelector("#fileInput");
 const apiStatus = document.querySelector("#apiStatus");
 const analyzeButton = document.querySelector("#analyzeButton");
 const scoreRing = document.querySelector("#scoreRing");
@@ -46,6 +49,9 @@ sourceText.addEventListener("input", () => {
   renderSourceHighlights();
 });
 sourceText.addEventListener("scroll", syncEditorScroll);
+fileOpenButton.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", handleFileOpen);
+fileSaveButton.addEventListener("click", handleFileSave);
 
 methodButton.addEventListener("click", () => {
   renderMethodology();
@@ -167,6 +173,213 @@ function renderLineNumbers() {
 function syncEditorScroll() {
   lineNumbers.scrollTop = sourceText.scrollTop;
   sourceHighlights.style.transform = `translateY(-${sourceText.scrollTop}px)`;
+}
+
+async function handleFileOpen() {
+  const file = fileInput.files?.[0];
+  fileInput.value = "";
+  if (!file) {
+    return;
+  }
+
+  setStatus("Öffnet", "pending");
+  try {
+    const text = await readTextFromFile(file);
+    const maxLength = Number(sourceText.maxLength || 0) || 20000;
+    const nextText = text.length > maxLength ? text.slice(0, maxLength) : text;
+    setEditorText(nextText);
+    setStatus(text.length > maxLength ? "Gekürzt" : "Geöffnet", text.length > maxLength ? "pending" : "ok");
+    if (text.length > maxLength) {
+      summaryText.textContent = `Die Datei wurde auf ${maxLength.toLocaleString("de-DE")} Zeichen gekürzt.`;
+    }
+  } catch (error) {
+    setStatus("Fehler", "error");
+    summaryText.textContent = error.message;
+  }
+}
+
+async function handleFileSave() {
+  const text = sourceText.value;
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const suggestedName = "genderpilot-text.txt";
+
+  try {
+    if ("showSaveFilePicker" in window) {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types: [
+          {
+            description: "Plaintext",
+            accept: { "text/plain": [".txt"] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      setStatus("Gesichert", "ok");
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = suggestedName;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setStatus("Gesichert", "ok");
+  } catch (error) {
+    if (error.name === "AbortError") {
+      setStatus("Bereit", "ok");
+      return;
+    }
+    setStatus("Fehler", "error");
+    summaryText.textContent = error.message;
+  }
+}
+
+async function readTextFromFile(file) {
+  const extension = file.name.split(".").pop()?.toLowerCase() || "";
+  if (["txt", "text", "md"].includes(extension) || file.type.startsWith("text/")) {
+    return file.text();
+  }
+  if (extension === "docx") {
+    return extractDocxText(await file.arrayBuffer());
+  }
+  throw new Error("Unterstützt werden Plaintext-Dateien und Word-Dateien im DOCX-Format.");
+}
+
+function setEditorText(text) {
+  sourceText.value = text;
+  activeHighlightRanges = [];
+  updateTextMeta();
+  renderSourceHighlights();
+  sourceText.focus();
+}
+
+async function extractDocxText(arrayBuffer) {
+  const entry = findZipEntry(arrayBuffer, "word/document.xml");
+  if (!entry) {
+    throw new Error("Die Word-Datei enthält keinen lesbaren Dokumenttext.");
+  }
+
+  const xmlBuffer = await readZipEntry(arrayBuffer, entry);
+  const xml = new TextDecoder("utf-8").decode(xmlBuffer);
+  const documentXml = new DOMParser().parseFromString(xml, "application/xml");
+  if (documentXml.querySelector("parsererror")) {
+    throw new Error("Der Dokumenttext der Word-Datei konnte nicht gelesen werden.");
+  }
+
+  const paragraphs = Array.from(documentXml.getElementsByTagNameNS("*", "p"))
+    .map((paragraph) => extractWordParagraphText(paragraph))
+    .filter((paragraph) => paragraph.trim().length > 0);
+
+  return paragraphs.join("\n\n").trim();
+}
+
+function findZipEntry(arrayBuffer, wantedName) {
+  const view = new DataView(arrayBuffer);
+  const bytes = new Uint8Array(arrayBuffer);
+  const eocdOffset = findEndOfCentralDirectory(view);
+  if (eocdOffset < 0) {
+    throw new Error("Die Word-Datei konnte nicht als DOCX-Zip gelesen werden.");
+  }
+
+  const centralDirectoryOffset = view.getUint32(eocdOffset + 16, true);
+  const centralDirectoryEntries = view.getUint16(eocdOffset + 10, true);
+  let offset = centralDirectoryOffset;
+
+  for (let index = 0; index < centralDirectoryEntries; index += 1) {
+    if (view.getUint32(offset, true) !== 0x02014b50) {
+      break;
+    }
+
+    const compression = view.getUint16(offset + 10, true);
+    const compressedSize = view.getUint32(offset + 20, true);
+    const fileNameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    const localHeaderOffset = view.getUint32(offset + 42, true);
+    const fileName = new TextDecoder("utf-8").decode(bytes.slice(offset + 46, offset + 46 + fileNameLength));
+
+    if (fileName === wantedName) {
+      return { compression, compressedSize, localHeaderOffset };
+    }
+
+    offset += 46 + fileNameLength + extraLength + commentLength;
+  }
+
+  return null;
+}
+
+function findEndOfCentralDirectory(view) {
+  for (let offset = view.byteLength - 22; offset >= 0; offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) {
+      return offset;
+    }
+  }
+  return -1;
+}
+
+async function readZipEntry(arrayBuffer, entry) {
+  const view = new DataView(arrayBuffer);
+  if (view.getUint32(entry.localHeaderOffset, true) !== 0x04034b50) {
+    throw new Error("Der DOCX-Inhalt ist beschädigt.");
+  }
+
+  const fileNameLength = view.getUint16(entry.localHeaderOffset + 26, true);
+  const extraLength = view.getUint16(entry.localHeaderOffset + 28, true);
+  const dataStart = entry.localHeaderOffset + 30 + fileNameLength + extraLength;
+  const compressedBytes = new Uint8Array(arrayBuffer, dataStart, entry.compressedSize);
+
+  if (entry.compression === 0) {
+    return compressedBytes.buffer.slice(compressedBytes.byteOffset, compressedBytes.byteOffset + compressedBytes.byteLength);
+  }
+  if (entry.compression === 8) {
+    return inflateRaw(compressedBytes);
+  }
+
+  throw new Error("Die Word-Datei nutzt eine nicht unterstützte DOCX-Kompression.");
+}
+
+async function inflateRaw(bytes) {
+  if (!("DecompressionStream" in window)) {
+    throw new Error("Dieser Browser kann DOCX-Dateien nicht direkt entpacken. Bitte als TXT speichern oder einen aktuellen Chromium-Browser nutzen.");
+  }
+
+  try {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Response(stream).arrayBuffer();
+  } catch (error) {
+    throw new Error("Die DOCX-Datei konnte nicht entpackt werden. Bitte als TXT speichern und erneut öffnen.");
+  }
+}
+
+function extractWordParagraphText(paragraph) {
+  const chunks = [];
+  collectWordText(paragraph, chunks);
+  return chunks.join("").replace(/\u00a0/g, " ");
+}
+
+function collectWordText(node, chunks) {
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    if (node.localName === "t") {
+      chunks.push(node.textContent || "");
+      return;
+    }
+    if (node.localName === "tab") {
+      chunks.push("\t");
+      return;
+    }
+    if (node.localName === "br" || node.localName === "cr") {
+      chunks.push("\n");
+      return;
+    }
+  }
+
+  node.childNodes.forEach((child) => collectWordText(child, chunks));
 }
 
 function renderResult(payload) {

@@ -9,7 +9,8 @@ Applikation zur Bewertung und Optimierung der Gendergerechtigkeit deutscher Text
 - `src/analysis_utils.py`: lokale Vorstatistik, Score-Zerlegung und Kennzahlenmethodik.
 - OpenAI Responses API: strukturierte Analyse und Verbesserungsvorschläge als JSON.
 
-Der Editor zeigt Zeilennummern und markiert erkannte kritische Stellen im Originaltext.
+Der Editor zeigt Zeilennummern, markiert erkannte kritische Stellen im Originaltext und
+kann Plaintext- sowie DOCX-Dateien öffnen. Gesichert wird als `.txt`.
 Die Gesamtwertung wird transparent aus vier Kennzahlen gebildet:
 30% inklusive Sichtbarkeit, 30% Vermeidung generischer Maskulina, 20% Pronomenbezug
 und 20% Strategiekonsistenz.
