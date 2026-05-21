@@ -68,8 +68,13 @@
 
           <section class="result-panel" aria-live="polite">
             <div class="score-strip">
-              <div class="score-ring" id="scoreRing">
-                <span id="scoreValue">--</span>
+              <div class="traffic-score" id="trafficScore" aria-label="Bewertungsampel">
+                <div class="traffic-light" aria-hidden="true">
+                  <span class="traffic-dot red" data-level="red"></span>
+                  <span class="traffic-dot yellow" data-level="yellow"></span>
+                  <span class="traffic-dot green" data-level="green"></span>
+                </div>
+                <strong id="scoreValue">--</strong>
               </div>
               <div class="score-copy">
                 <div class="score-title-row">

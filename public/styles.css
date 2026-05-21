@@ -363,18 +363,58 @@ button {
   background: linear-gradient(180deg, #ffffff 0%, #eef8fd 100%);
 }
 
-.score-ring {
+.traffic-score {
   display: grid;
-  width: 86px;
-  height: 86px;
-  place-items: center;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at center, #ffffff 58%, transparent 59%),
-    conic-gradient(var(--accent) 0deg, var(--line) 0deg);
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  min-width: 116px;
 }
 
-.score-ring span {
+.traffic-light {
+  display: grid;
+  gap: 7px;
+  width: 42px;
+  padding: 7px;
+  border: 1px solid #1b3048;
+  border-radius: 999px;
+  background: #07111d;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.traffic-dot {
+  display: block;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #263546;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35);
+}
+
+.traffic-dot.red {
+  --active-color: #d33b34;
+}
+
+.traffic-dot.yellow {
+  --active-color: #f0b429;
+}
+
+.traffic-dot.green {
+  --active-color: #21a67a;
+}
+
+.traffic-score[data-state="red"] .traffic-dot.red,
+.traffic-score[data-state="yellow"] .traffic-dot.yellow,
+.traffic-score[data-state="green"] .traffic-dot.green {
+  background: var(--active-color);
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.18),
+    0 0 16px var(--active-color),
+    inset 0 2px 5px rgba(255, 255, 255, 0.26);
+}
+
+.traffic-score strong {
+  color: var(--accent-strong);
   font-size: 1.35rem;
   font-weight: 900;
 }

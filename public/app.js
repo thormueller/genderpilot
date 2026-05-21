@@ -9,7 +9,7 @@ const applyOptimizedButton = document.querySelector("#applyOptimizedButton");
 const fileInput = document.querySelector("#fileInput");
 const apiStatus = document.querySelector("#apiStatus");
 const analyzeButton = document.querySelector("#analyzeButton");
-const scoreRing = document.querySelector("#scoreRing");
+const trafficScore = document.querySelector("#trafficScore");
 const scoreValue = document.querySelector("#scoreValue");
 const ratingTitle = document.querySelector("#ratingTitle");
 const summaryText = document.querySelector("#summaryText");
@@ -481,7 +481,7 @@ function renderResult(payload) {
   currentMethodology = breakdown.methodology || null;
 
   scoreValue.textContent = score;
-  scoreRing.style.background = `radial-gradient(circle at center, #ffffff 58%, transparent 59%), conic-gradient(${scoreColor(score)} ${score * 3.6}deg, var(--line) 0deg)`;
+  trafficScore.dataset.state = trafficState(score);
   ratingTitle.textContent = formatRating(breakdown.rating || analysis.rating || "Analyse");
   summaryText.textContent = analysis.summary || "Keine Zusammenfassung vorhanden.";
 
@@ -714,11 +714,10 @@ function setStatus(text, state) {
   apiStatus.dataset.state = state;
 }
 
-function scoreColor(score) {
-  if (score >= 80) return "var(--accent-strong)";
-  if (score >= 55) return "var(--accent)";
-  if (score >= 35) return "var(--amber)";
-  return "var(--red)";
+function trafficState(score) {
+  if (score >= 75) return "green";
+  if (score >= 45) return "yellow";
+  return "red";
 }
 
 function formatRating(value) {
