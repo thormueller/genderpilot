@@ -5,7 +5,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from analysis_utils import calculate_local_statistics, extract_response_text, parse_model_json
+from analysis_utils import (
+    calculate_local_statistics,
+    calculate_score_breakdown,
+    extract_response_text,
+    parse_model_json,
+)
 
 
 def test_calculate_local_statistics_detects_common_signals():
@@ -17,6 +22,22 @@ def test_calculate_local_statistics_detects_common_signals():
     assert stats["neutral_terms"] == 1
     assert stats["inclusive_forms"] == 1
     assert stats["potential_masculine_generics"] == 2
+    assert stats["gender_relevant_mentions"] == 4
+
+
+def test_calculate_score_breakdown_explains_weighted_score():
+    stats = calculate_local_statistics(
+        "Liebe Mitarbeiterinnen und Mitarbeiter, alle Teilnehmenden erhalten Informationen."
+    )
+
+    breakdown = calculate_score_breakdown(stats, {"score": 88})
+
+    assert stats["paired_forms"] == 1
+    assert stats["potential_masculine_generics"] == 0
+    assert breakdown["score"] >= 70
+    assert len(breakdown["components"]) == 4
+    assert sum(component["weight"] for component in breakdown["components"]) == 100
+    assert breakdown["methodology"]["formula"].startswith("Gesamtwertung")
 
 
 def test_extract_response_text_prefers_top_level_output_text():

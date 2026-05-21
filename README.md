@@ -6,8 +6,12 @@ Applikation zur Bewertung und Optimierung der Gendergerechtigkeit deutscher Text
 
 - `public/`: Browser-GUI mit Texteditor, Statistik, Befunden und Optimierungstext.
 - `src/worker.py`: Cloudflare Python Worker mit den API-Routen `/api/health` und `/api/analyze`.
-- `src/analysis_utils.py`: lokale, deterministische Vorstatistik für deutsche Textsignale.
+- `src/analysis_utils.py`: lokale Vorstatistik, Score-Zerlegung und Kennzahlenmethodik.
 - OpenAI Responses API: strukturierte Analyse und Verbesserungsvorschläge als JSON.
+
+Die Gesamtwertung wird transparent aus vier Kennzahlen gebildet:
+30% inklusive Sichtbarkeit, 30% Vermeidung generischer Maskulina, 20% Pronomenbezug
+und 20% Strategiekonsistenz.
 
 ## Lokal starten
 

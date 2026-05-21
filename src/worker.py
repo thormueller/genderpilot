@@ -8,7 +8,12 @@ from js import Object, Response as JsResponse, fetch
 from pyodide.ffi import to_js as _to_js
 from workers import WorkerEntrypoint
 
-from analysis_utils import calculate_local_statistics, extract_response_text, parse_model_json
+from analysis_utils import (
+    calculate_local_statistics,
+    calculate_score_breakdown,
+    extract_response_text,
+    parse_model_json,
+)
 
 
 MAX_TEXT_LENGTH = 20_000
@@ -80,6 +85,7 @@ class Default(WorkerEntrypoint):
             {
                 "analysis": model_analysis,
                 "local_statistics": local_statistics,
+                "score_breakdown": calculate_score_breakdown(local_statistics, model_analysis),
                 "meta": {
                     "model": model,
                     "text_length": len(text),
