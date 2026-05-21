@@ -34,6 +34,16 @@ Cloudflare-Pages-App. In Cloudflare CI/CD sollte der Deploy-Befehl deshalb `uv r
 pywrangler deploy` sein. Ein reines `pip install .` baut nur die Python-Abhängigkeiten,
 veröffentlicht aber keinen Python Worker.
 
+Alternativ kann Cloudflare Workers Builds diese Scripts nutzen:
+
+```text
+Build command: npm run build
+Deploy command: npm run deploy
+```
+
+`npm run build` ist hier absichtlich nur ein No-op, weil die GUI bereits als statische
+Dateien in `public/` liegt.
+
 Den API-Key in Cloudflare als Secret hinterlegen:
 
 ```powershell

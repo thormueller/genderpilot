@@ -1,0 +1,13 @@
+{
+  "name": "genderpilot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "echo \"No frontend build required; static assets are served from public/.\"",
+    "dev": "python -m pip install uv && uvx --from workers-py pywrangler dev",
+    "deploy": "python -m pip install uv && uvx --from workers-py pywrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.64.0"
+  }
+}
