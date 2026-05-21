@@ -29,6 +29,11 @@ uv run pywrangler dev
 uv run pywrangler deploy
 ```
 
+Wichtig: Dieses Projekt ist ein **Cloudflare Worker mit Static Assets**, keine klassische
+Cloudflare-Pages-App. In Cloudflare CI/CD sollte der Deploy-Befehl deshalb `uv run
+pywrangler deploy` sein. Ein reines `pip install .` baut nur die Python-Abhängigkeiten,
+veröffentlicht aber keinen Python Worker.
+
 Den API-Key in Cloudflare als Secret hinterlegen:
 
 ```powershell

@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Literal
 from urllib.parse import urlparse
 
-import asgi
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -21,7 +20,9 @@ class Default(WorkerEntrypoint):
     async def fetch(self, request):
         path = urlparse(request.url).path
         if path.startswith("/api/"):
-            return await asgi.fetch(app, request, self.env)
+            import asgi
+
+            return await asgi.fetch(app, request.js_object, self.env)
 
         return await self.env.ASSETS.fetch(request)
 

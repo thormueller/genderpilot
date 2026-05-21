@@ -1,7 +1,7 @@
 name = "genderpilot"
 main = "src/worker.py"
 compatibility_date = "2026-05-21"
-compatibility_flags = ["python_workers"]
+compatibility_flags = ["python_workers", "python_dedicated_snapshot"]
 
 [vars]
 OPENAI_MODEL = "gpt-5.4-mini"
@@ -10,3 +10,7 @@ OPENAI_MODEL = "gpt-5.4-mini"
 directory = "./public"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[observability]
+enabled = true
