@@ -1,0 +1,12 @@
+name = "genderpilot"
+main = "src/worker.py"
+compatibility_date = "2026-05-21"
+compatibility_flags = ["python_workers"]
+
+[vars]
+OPENAI_MODEL = "gpt-5.4-mini"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"

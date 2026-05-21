@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Genderpilot</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace" aria-label="Analysearbeitsbereich">
+        <header class="topbar">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true">G</span>
+            <div>
+              <h1>Genderpilot</h1>
+              <p>Textanalyse für gendergerechte deutsche Sprache</p>
+            </div>
+          </div>
+          <div class="status-pill" id="apiStatus">Bereit</div>
+        </header>
+
+        <div class="editor-grid">
+          <form class="editor-panel" id="analysisForm">
+            <div class="field-row">
+              <label for="mode">Stil</label>
+              <select id="mode" name="mode">
+                <option value="neutral">Neutral</option>
+                <option value="paired">Paarform</option>
+                <option value="colon">Doppelpunkt</option>
+              </select>
+            </div>
+            <div class="field-row">
+              <label for="audience">Zielgruppe</label>
+              <input id="audience" name="audience" value="allgemein" maxlength="80" />
+            </div>
+            <label class="textarea-label" for="sourceText">Originaltext</label>
+            <textarea
+              id="sourceText"
+              name="sourceText"
+              maxlength="20000"
+              spellcheck="true"
+              placeholder="Text hier einfügen..."
+            ></textarea>
+            <div class="editor-actions">
+              <span id="textMeta">0 Wörter</span>
+              <button type="submit" id="analyzeButton">Analysieren</button>
+            </div>
+          </form>
+
+          <section class="result-panel" aria-live="polite">
+            <div class="score-strip">
+              <div class="score-ring" id="scoreRing">
+                <span id="scoreValue">--</span>
+              </div>
+              <div>
+                <p class="eyebrow">Bewertung</p>
+                <h2 id="ratingTitle">Noch keine Analyse</h2>
+                <p id="summaryText">Füge einen Text ein und starte die Prüfung.</p>
+              </div>
+            </div>
+
+            <div class="stats-grid" id="statsGrid">
+              <div><span>Wörter</span><strong>0</strong></div>
+              <div><span>Hinweise</span><strong>0</strong></div>
+              <div><span>Neutrale Formen</span><strong>0</strong></div>
+              <div><span>Inklusive Formen</span><strong>0</strong></div>
+            </div>
+
+            <div class="tabs" role="tablist" aria-label="Analyseergebnisse">
+              <button type="button" class="tab active" data-tab="findings">Befunde</button>
+              <button type="button" class="tab" data-tab="alternatives">Alternativen</button>
+              <button type="button" class="tab" data-tab="improved">Optimiert</button>
+            </div>
+
+            <div class="tab-panel active" id="findingsPanel">
+              <div class="empty-state">Noch keine Befunde.</div>
+            </div>
+            <div class="tab-panel" id="alternativesPanel">
+              <div class="empty-state">Noch keine Alternativen.</div>
+            </div>
+            <div class="tab-panel" id="improvedPanel">
+              <textarea id="improvedText" readonly></textarea>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

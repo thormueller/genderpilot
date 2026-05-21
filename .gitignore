@@ -1,0 +1,6 @@
+.dev.vars
+.venv/
+__pycache__/
+.pytest_cache/
+.wrangler/
+dist/

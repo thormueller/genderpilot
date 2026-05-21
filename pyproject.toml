@@ -1,0 +1,17 @@
+[project]
+name = "genderpilot"
+version = "0.1.0"
+description = "Cloudflare Python Worker for analyzing and improving gender-inclusive German texts."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "httpx",
+    "pydantic",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "workers-py",
+    "workers-runtime-sdk",
+]
