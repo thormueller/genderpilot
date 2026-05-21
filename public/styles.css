@@ -227,14 +227,14 @@ textarea:focus {
   background: var(--surface-muted);
   color: #6d8798;
   font-variant-numeric: tabular-nums;
-  line-height: 1.5;
+  line-height: var(--editor-line-height, 1.5em);
   text-align: right;
   user-select: none;
 }
 
 .line-numbers span {
   display: block;
-  min-height: 1.5em;
+  height: var(--editor-line-height, 1.5em);
 }
 
 .editor-stack {
@@ -332,6 +332,11 @@ button {
 .secondary-button:hover {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 #analyzeButton:hover {

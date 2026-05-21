@@ -5,6 +5,7 @@ const lineNumbers = document.querySelector("#lineNumbers");
 const textMeta = document.querySelector("#textMeta");
 const fileOpenButton = document.querySelector("#fileOpenButton");
 const fileSaveButton = document.querySelector("#fileSaveButton");
+const applyOptimizedButton = document.querySelector("#applyOptimizedButton");
 const fileInput = document.querySelector("#fileInput");
 const apiStatus = document.querySelector("#apiStatus");
 const analyzeButton = document.querySelector("#analyzeButton");
@@ -25,6 +26,8 @@ const methodClose = document.querySelector("#methodClose");
 const methodContent = document.querySelector("#methodContent");
 let currentMethodology = null;
 let activeHighlightRanges = [];
+let lineMeasureContext = null;
+let sourceResizeObserver = null;
 
 const sampleText =
   "Alle Mitarbeiter und Kunden werden gebeten, ihre Unterlagen an den zuständigen Ansprechpartner zu senden. Die Teilnehmer erhalten anschließend weitere Informationen.";
@@ -33,6 +36,12 @@ sourceText.value = sampleText;
 updateTextMeta();
 renderSourceHighlights();
 checkApiHealth();
+
+if ("ResizeObserver" in window) {
+  sourceResizeObserver = new ResizeObserver(() => renderLineNumbers());
+  sourceResizeObserver.observe(sourceText);
+}
+window.addEventListener("resize", renderLineNumbers);
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
@@ -46,12 +55,14 @@ document.querySelectorAll(".tab").forEach((tab) => {
 sourceText.addEventListener("input", () => {
   updateTextMeta();
   activeHighlightRanges = [];
+  applyOptimizedButton.disabled = true;
   renderSourceHighlights();
 });
 sourceText.addEventListener("scroll", syncEditorScroll);
 fileOpenButton.addEventListener("click", () => fileInput.click());
 fileInput.addEventListener("change", handleFileOpen);
 fileSaveButton.addEventListener("click", handleFileSave);
+applyOptimizedButton.addEventListener("click", applyOptimizedText);
 
 methodButton.addEventListener("click", () => {
   renderMethodology();
@@ -165,14 +176,81 @@ function updateTextMeta() {
 }
 
 function renderLineNumbers() {
-  const lineCount = Math.max(1, sourceText.value.split("\n").length);
-  lineNumbers.innerHTML = Array.from({ length: lineCount }, (_, index) => `<span>${index + 1}</span>`).join("");
+  const lineHeight = getEditorLineHeight();
+  const visualLineCount = countVisualLines(sourceText.value);
+  lineNumbers.style.setProperty("--editor-line-height", `${lineHeight}px`);
+  lineNumbers.innerHTML = Array.from(
+    { length: Math.max(1, visualLineCount) },
+    (_, index) => `<span>${index + 1}</span>`,
+  ).join("");
   syncEditorScroll();
 }
 
 function syncEditorScroll() {
   lineNumbers.scrollTop = sourceText.scrollTop;
   sourceHighlights.style.transform = `translateY(-${sourceText.scrollTop}px)`;
+}
+
+function countVisualLines(text) {
+  const computed = window.getComputedStyle(sourceText);
+  const availableWidth =
+    sourceText.clientWidth - parseFloat(computed.paddingLeft) - parseFloat(computed.paddingRight);
+  const width = Math.max(1, availableWidth);
+
+  return text.split("\n").reduce((total, line) => total + countWrappedRows(line, width, computed), 0);
+}
+
+function countWrappedRows(line, width, computed) {
+  if (!line) {
+    return 1;
+  }
+
+  const context = getLineMeasureContext(computed);
+  let rows = 1;
+  let currentWidth = 0;
+  const tokens = line.match(/\S+\s*|\s+/g) || [line];
+
+  tokens.forEach((token) => {
+    const tokenWidth = context.measureText(token).width;
+    if (tokenWidth <= width) {
+      if (currentWidth > 0 && currentWidth + tokenWidth > width) {
+        rows += 1;
+        currentWidth = tokenWidth;
+      } else {
+        currentWidth += tokenWidth;
+      }
+      return;
+    }
+
+    for (const character of token) {
+      const characterWidth = context.measureText(character).width;
+      if (currentWidth > 0 && currentWidth + characterWidth > width) {
+        rows += 1;
+        currentWidth = characterWidth;
+      } else {
+        currentWidth += characterWidth;
+      }
+    }
+  });
+
+  return rows;
+}
+
+function getLineMeasureContext(computed) {
+  if (!lineMeasureContext) {
+    lineMeasureContext = document.createElement("canvas").getContext("2d");
+  }
+  lineMeasureContext.font = computed.font;
+  return lineMeasureContext;
+}
+
+function getEditorLineHeight() {
+  const computed = window.getComputedStyle(sourceText);
+  const parsed = parseFloat(computed.lineHeight);
+  if (Number.isFinite(parsed)) {
+    return parsed;
+  }
+  return parseFloat(computed.fontSize) * 1.5;
 }
 
 async function handleFileOpen() {
@@ -254,9 +332,22 @@ async function readTextFromFile(file) {
 function setEditorText(text) {
   sourceText.value = text;
   activeHighlightRanges = [];
+  applyOptimizedButton.disabled = true;
   updateTextMeta();
   renderSourceHighlights();
   sourceText.focus();
+}
+
+function applyOptimizedText() {
+  const optimized = improvedText.value.trim();
+  if (!optimized) {
+    setStatus("Keine Optimierung", "error");
+    summaryText.textContent = "Es liegt noch kein optimierter Text vor.";
+    return;
+  }
+
+  setEditorText(optimized);
+  setStatus("Übernommen", "ok");
 }
 
 async function extractDocxText(arrayBuffer) {
@@ -407,6 +498,7 @@ function renderResult(payload) {
   renderFindings(analysis.findings || []);
   renderAlternatives(analysis.alternatives || []);
   improvedText.value = analysis.improved_text || "";
+  applyOptimizedButton.disabled = !improvedText.value.trim();
 }
 
 function renderScoreBreakdown(breakdown) {
