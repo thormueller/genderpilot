@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Literal
+import json
+from typing import Any
 from urllib.parse import urlparse
 
-import httpx
-from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel, Field
+from js import Object, Response as JsResponse, fetch
+from pyodide.ffi import to_js as _to_js
 from workers import WorkerEntrypoint
 
 from analysis_utils import calculate_local_statistics, extract_response_text, parse_model_json
@@ -19,75 +19,87 @@ OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
         path = urlparse(request.url).path
-        if path.startswith("/api/"):
-            import asgi
 
-            return await asgi.fetch(app, request.js_object, self.env)
+        if path == "/api/health":
+            return json_response({"ok": True})
+
+        if path == "/api/analyze":
+            if request.method != "POST":
+                return json_response({"detail": "Methode nicht erlaubt."}, status=405)
+            return await self._analyze_text(request)
+
+        if path.startswith("/api/"):
+            return json_response({"detail": "API-Route nicht gefunden."}, status=404)
 
         return await self.env.ASSETS.fetch(request)
 
+    async def _analyze_text(self, request):
+        try:
+            payload = await request.json()
+        except Exception:
+            return json_response({"detail": "Der Request-Body ist kein gültiges JSON."}, status=400)
 
-class AnalyzeRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=MAX_TEXT_LENGTH)
-    mode: Literal["neutral", "paired", "colon"] = "neutral"
-    audience: str = Field(default="allgemein", max_length=80)
+        text = js_string(payload, "text").strip()
+        if not text:
+            return json_response({"detail": "Bitte gib einen Text ein."}, status=400)
+        if len(text) > MAX_TEXT_LENGTH:
+            return json_response(
+                {"detail": f"Der Text darf maximal {MAX_TEXT_LENGTH} Zeichen lang sein."},
+                status=400,
+            )
 
+        mode = js_string(payload, "mode", "neutral")
+        if mode not in {"neutral", "paired", "colon"}:
+            mode = "neutral"
 
-app = FastAPI(title="Genderpilot API")
+        audience = js_string(payload, "audience", "allgemein").strip() or "allgemein"
+        audience = audience[:80]
 
+        api_key = env_value(self.env, "OPENAI_API_KEY")
+        if not api_key:
+            return json_response({"detail": "OPENAI_API_KEY ist nicht konfiguriert."}, status=500)
 
-@app.get("/api/health")
-async def health() -> dict[str, bool]:
-    return {"ok": True}
+        model = env_value(self.env, "OPENAI_MODEL", DEFAULT_MODEL) or DEFAULT_MODEL
+        local_statistics = calculate_local_statistics(text)
 
+        try:
+            model_analysis = await request_openai_analysis(
+                api_key=api_key,
+                model=model,
+                text=text,
+                mode=mode,
+                audience=audience,
+                local_statistics=local_statistics,
+            )
+        except OpenAIRequestError as exc:
+            return json_response({"detail": str(exc)}, status=502)
+        except Exception as exc:
+            return json_response({"detail": f"Unerwarteter API-Fehler: {exc}"}, status=500)
 
-@app.post("/api/analyze")
-async def analyze_text(payload: AnalyzeRequest, request: Request) -> dict:
-    text = payload.text.strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="Bitte gib einen Text ein.")
-
-    local_statistics = calculate_local_statistics(text)
-    env = request.scope["env"]
-    api_key = _env_value(env, "OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="OPENAI_API_KEY ist nicht konfiguriert.",
+        return json_response(
+            {
+                "analysis": model_analysis,
+                "local_statistics": local_statistics,
+                "meta": {
+                    "model": model,
+                    "text_length": len(text),
+                },
+            }
         )
 
-    model = _env_value(env, "OPENAI_MODEL", DEFAULT_MODEL)
-    model_analysis = await _request_openai_analysis(
-        api_key=api_key,
-        model=model,
-        text=text,
-        mode=payload.mode,
-        audience=payload.audience,
-        local_statistics=local_statistics,
-    )
 
-    return {
-        "analysis": model_analysis,
-        "local_statistics": local_statistics,
-        "meta": {
-            "model": model,
-            "text_length": len(text),
-        },
-    }
-
-
-async def _request_openai_analysis(
+async def request_openai_analysis(
     *,
     api_key: str,
     model: str,
     text: str,
     mode: str,
     audience: str,
-    local_statistics: dict,
-) -> dict:
+    local_statistics: dict[str, Any],
+) -> dict[str, Any]:
     request_body = {
         "model": model,
-        "instructions": _build_instructions(mode=mode, audience=audience, local_statistics=local_statistics),
+        "instructions": build_instructions(mode=mode, audience=audience, local_statistics=local_statistics),
         "input": "Analysiere und optimiere den folgenden deutschen Text:\n\n" + text,
         "text": {
             "format": {
@@ -99,39 +111,47 @@ async def _request_openai_analysis(
         },
     }
 
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        response = await client.post(
-            OPENAI_RESPONSES_URL,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=request_body,
-        )
+    response = await fetch(
+        OPENAI_RESPONSES_URL,
+        to_js(
+            {
+                "method": "POST",
+                "headers": {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                "body": json.dumps(request_body, ensure_ascii=False),
+            }
+        ),
+    )
+    response_text = await response.text()
 
-    if response.status_code >= 400:
-        raise HTTPException(
-            status_code=502,
-            detail=f"OpenAI API Fehler {response.status_code}: {response.text[:800]}",
-        )
+    if not response.ok:
+        raise OpenAIRequestError(format_openai_error(response.status, response_text))
 
-    output_text = extract_response_text(response.json())
+    try:
+        response_payload = json.loads(response_text)
+    except json.JSONDecodeError as exc:
+        raise OpenAIRequestError("Die OpenAI API lieferte kein gültiges JSON.") from exc
+
+    output_text = extract_response_text(response_payload)
     if not output_text:
-        raise HTTPException(status_code=502, detail="Die OpenAI-Antwort enthielt keinen auswertbaren Text.")
+        raise OpenAIRequestError("Die OpenAI-Antwort enthielt keinen auswertbaren Text.")
 
     try:
         return parse_model_json(output_text)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Die OpenAI-Antwort war kein gültiges JSON.") from exc
+        raise OpenAIRequestError("Die OpenAI-Antwort war kein gültiges JSON.") from exc
 
 
-def _build_instructions(*, mode: str, audience: str, local_statistics: dict) -> str:
+def build_instructions(*, mode: str, audience: str, local_statistics: dict[str, Any]) -> str:
     mode_labels = {
         "neutral": "bevorzuge neutrale und substantivierte Formen, wenn sie natürlich klingen",
         "paired": "bevorzuge Paarformen, wenn sie präzise und lesbar bleiben",
         "colon": "verwende den Gender-Doppelpunkt sparsam und konsistent",
     }
     mode_label = mode_labels.get(mode, mode_labels["neutral"])
+    statistics_json = json.dumps(local_statistics, ensure_ascii=False)
 
     return f"""
 Du bist Genderpilot, ein sorgfältiges Analysewerkzeug für gendergerechte deutsche Sprache.
@@ -143,19 +163,63 @@ Zielgruppe: {audience}
 Optimierungsstil: {mode_label}
 
 Nutze diese lokale Vorstatistik als Hinweis, nicht als alleinige Wahrheit:
-{local_statistics}
+{statistics_json}
 
 Antworte ausschließlich als JSON nach dem vorgegebenen Schema. Der optimierte Text soll den
 Sinn, Ton und fachlichen Inhalt des Originals bewahren.
 """.strip()
 
 
-def _env_value(env, name: str, default: str | None = None) -> str | None:
+def json_response(data: dict[str, Any], *, status: int = 200):
+    return JsResponse.new(
+        json.dumps(data, ensure_ascii=False),
+        to_js(
+            {
+                "status": status,
+                "headers": {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Cache-Control": "no-store",
+                },
+            }
+        ),
+    )
+
+
+def to_js(obj):
+    return _to_js(obj, dict_converter=Object.fromEntries)
+
+
+def js_string(payload, name: str, default: str = "") -> str:
+    try:
+        value = getattr(payload, name)
+    except Exception:
+        return default
+    if value is None:
+        return default
+    return str(value)
+
+
+def env_value(env, name: str, default: str | None = None) -> str | None:
     try:
         value = getattr(env, name)
     except Exception:
         return default
-    return value if value not in ("", None) else default
+    return str(value) if value not in ("", None) else default
+
+
+def format_openai_error(status: int, response_text: str) -> str:
+    try:
+        payload = json.loads(response_text)
+        message = payload.get("error", {}).get("message")
+        if message:
+            return f"OpenAI API Fehler {status}: {message}"
+    except Exception:
+        pass
+    return f"OpenAI API Fehler {status}: {response_text[:800]}"
+
+
+class OpenAIRequestError(Exception):
+    pass
 
 
 ANALYSIS_SCHEMA = {

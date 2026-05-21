@@ -17,6 +17,7 @@ const sampleText =
 
 sourceText.value = sampleText;
 updateTextMeta();
+checkApiHealth();
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
@@ -49,7 +50,7 @@ form.addEventListener("submit", async (event) => {
       }),
     });
 
-    const payload = await response.json();
+    const payload = await readJsonResponse(response, "Analyse");
     if (!response.ok) {
       throw new Error(payload.detail || "Analyse fehlgeschlagen");
     }
@@ -63,6 +64,51 @@ form.addEventListener("submit", async (event) => {
     setLoading(false);
   }
 });
+
+async function checkApiHealth() {
+  try {
+    const response = await fetch("/api/health", {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    const payload = await readJsonResponse(response, "API-Status");
+    if (!response.ok || payload.ok !== true) {
+      throw new Error(payload.detail || "API-Status konnte nicht bestätigt werden.");
+    }
+    setStatus("API bereit", "ok");
+  } catch (error) {
+    setStatus("API Fehler", "error");
+    summaryText.textContent = error.message;
+  }
+}
+
+async function readJsonResponse(response, context) {
+  const contentType = response.headers.get("content-type") || "";
+  const bodyText = await response.text();
+
+  if (!bodyText.trim()) {
+    if (response.ok) {
+      return {};
+    }
+    throw new Error(`${context}: leere Antwort von ${response.url} (${response.status}).`);
+  }
+
+  if (contentType.includes("application/json")) {
+    try {
+      return JSON.parse(bodyText);
+    } catch {
+      throw new Error(`${context}: Die API-Antwort ist kein gültiges JSON.`);
+    }
+  }
+
+  if (bodyText.trimStart().startsWith("<!DOCTYPE") || bodyText.trimStart().startsWith("<html")) {
+    throw new Error(
+      `${context}: /api liefert HTML statt JSON. Prüfe, ob Cloudflare wirklich mit "npm run deploy" und pywrangler deployed wurde.`,
+    );
+  }
+
+  throw new Error(`${context}: Unerwartete Antwort von ${response.url} (${response.status}).`);
+}
 
 function updateTextMeta() {
   const words = countWords(sourceText.value);
