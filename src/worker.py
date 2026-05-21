@@ -190,6 +190,12 @@ def to_js(obj):
 
 
 def js_string(payload, name: str, default: str = "") -> str:
+    if isinstance(payload, dict):
+        value = payload.get(name, default)
+        if value is None:
+            return default
+        return str(value)
+
     try:
         value = getattr(payload, name)
     except Exception:
