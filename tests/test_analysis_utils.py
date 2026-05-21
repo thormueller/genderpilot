@@ -40,6 +40,15 @@ def test_calculate_score_breakdown_explains_weighted_score():
     assert breakdown["methodology"]["formula"].startswith("Gesamtwertung")
 
 
+def test_calculate_local_statistics_returns_markable_positions():
+    stats = calculate_local_statistics("Jeder Fahrer prüft sein Fahrzeug.")
+
+    assert stats["potential_masculine_terms"][0]["term"] == "Fahrer"
+    assert stats["potential_masculine_terms"][0]["position"] == 6
+    assert stats["masculine_pronoun_terms"][0]["term"] == "Jeder"
+    assert stats["masculine_pronoun_terms"][0]["position"] == 0
+
+
 def test_extract_response_text_prefers_top_level_output_text():
     assert extract_response_text({"output_text": '{"ok": true}'}) == '{"ok": true}'
 

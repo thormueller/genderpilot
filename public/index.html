@@ -11,9 +11,9 @@
       <section class="workspace" aria-label="Analysearbeitsbereich">
         <header class="topbar">
           <div class="brand">
-            <span class="brand-mark" aria-hidden="true">G</span>
+            <img class="brand-logo" src="/logo_genderpilot.jpg" alt="Genderpilot Logo" />
             <div>
-              <h1>Genderpilot</h1>
+              <h1 class="sr-only">Genderpilot</h1>
               <p>Textanalyse für gendergerechte deutsche Sprache</p>
             </div>
           </div>
@@ -35,13 +35,19 @@
               <input id="audience" name="audience" value="allgemein" maxlength="80" />
             </div>
             <label class="textarea-label" for="sourceText">Originaltext</label>
-            <textarea
-              id="sourceText"
-              name="sourceText"
-              maxlength="20000"
-              spellcheck="true"
-              placeholder="Text hier einfügen..."
-            ></textarea>
+            <div class="text-editor" id="textEditor">
+              <div class="line-numbers" id="lineNumbers" aria-hidden="true">1</div>
+              <div class="editor-stack">
+                <div class="source-highlights" id="sourceHighlights" aria-hidden="true"></div>
+                <textarea
+                  id="sourceText"
+                  name="sourceText"
+                  maxlength="20000"
+                  spellcheck="true"
+                  placeholder="Text hier einfügen..."
+                ></textarea>
+              </div>
+            </div>
             <div class="editor-actions">
               <span id="textMeta">0 Wörter</span>
               <button type="submit" id="analyzeButton">Analysieren</button>

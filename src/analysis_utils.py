@@ -113,11 +113,19 @@ def calculate_local_statistics(text: str) -> dict[str, Any]:
         for match in MASCULINE_TERM_RE.finditer(text)
         if not _position_in_spans(match.start(), pair_spans)
     ]
+    masculine_pronoun_matches = [
+        {
+            "term": match.group(0),
+            "position": match.start(),
+            "suggestion": "neutralen oder pluralen Bezug prüfen",
+        }
+        for match in MASCULINE_PRONOUN_RE.finditer(text)
+    ]
 
     neutral_count = sum(1 for word in words if word.casefold() in NEUTRAL_TERMS)
     inclusive_count = len(INCLUSIVE_FORM_RE.findall(text))
     pair_count = len(pair_matches)
-    masculine_pronoun_count = len(MASCULINE_PRONOUN_RE.findall(text))
+    masculine_pronoun_count = len(masculine_pronoun_matches)
     sentence_count = len(SENTENCE_RE.findall(text.strip()))
     word_count = len(words)
     relevant_mentions = neutral_count + inclusive_count + pair_count + len(masculine_matches) + masculine_pronoun_count
@@ -136,6 +144,7 @@ def calculate_local_statistics(text: str) -> dict[str, Any]:
         "masculine_density_per_100_words": round((len(masculine_matches) / max(word_count, 1)) * 100, 2),
         "pronoun_density_per_100_words": round((masculine_pronoun_count / max(word_count, 1)) * 100, 2),
         "potential_masculine_terms": masculine_matches[:25],
+        "masculine_pronoun_terms": masculine_pronoun_matches[:25],
     }
 
 

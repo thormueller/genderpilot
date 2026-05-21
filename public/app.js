@@ -1,5 +1,7 @@
 const form = document.querySelector("#analysisForm");
 const sourceText = document.querySelector("#sourceText");
+const sourceHighlights = document.querySelector("#sourceHighlights");
+const lineNumbers = document.querySelector("#lineNumbers");
 const textMeta = document.querySelector("#textMeta");
 const apiStatus = document.querySelector("#apiStatus");
 const analyzeButton = document.querySelector("#analyzeButton");
@@ -19,12 +21,14 @@ const methodDialog = document.querySelector("#methodDialog");
 const methodClose = document.querySelector("#methodClose");
 const methodContent = document.querySelector("#methodContent");
 let currentMethodology = null;
+let activeHighlightRanges = [];
 
 const sampleText =
   "Alle Mitarbeiter und Kunden werden gebeten, ihre Unterlagen an den zuständigen Ansprechpartner zu senden. Die Teilnehmer erhalten anschließend weitere Informationen.";
 
 sourceText.value = sampleText;
 updateTextMeta();
+renderSourceHighlights();
 checkApiHealth();
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -36,7 +40,12 @@ document.querySelectorAll(".tab").forEach((tab) => {
   });
 });
 
-sourceText.addEventListener("input", updateTextMeta);
+sourceText.addEventListener("input", () => {
+  updateTextMeta();
+  activeHighlightRanges = [];
+  renderSourceHighlights();
+});
+sourceText.addEventListener("scroll", syncEditorScroll);
 
 methodButton.addEventListener("click", () => {
   renderMethodology();
@@ -63,6 +72,12 @@ form.addEventListener("submit", async (event) => {
   if (!text) {
     setStatus("Text fehlt", "error");
     return;
+  }
+  if (sourceText.value !== text) {
+    sourceText.value = text;
+    updateTextMeta();
+    activeHighlightRanges = [];
+    renderSourceHighlights();
   }
 
   setLoading(true);
@@ -140,6 +155,18 @@ async function readJsonResponse(response, context) {
 function updateTextMeta() {
   const words = countWords(sourceText.value);
   textMeta.textContent = `${words} ${words === 1 ? "Wort" : "Wörter"}`;
+  renderLineNumbers();
+}
+
+function renderLineNumbers() {
+  const lineCount = Math.max(1, sourceText.value.split("\n").length);
+  lineNumbers.innerHTML = Array.from({ length: lineCount }, (_, index) => `<span>${index + 1}</span>`).join("");
+  syncEditorScroll();
+}
+
+function syncEditorScroll() {
+  lineNumbers.scrollTop = sourceText.scrollTop;
+  sourceHighlights.style.transform = `translateY(-${sourceText.scrollTop}px)`;
 }
 
 function renderResult(payload) {
@@ -162,6 +189,8 @@ function renderResult(payload) {
   ].join("");
 
   renderScoreBreakdown(breakdown);
+  activeHighlightRanges = buildHighlightRanges(local, analysis.findings || [], sourceText.value);
+  renderSourceHighlights();
   renderFindings(analysis.findings || []);
   renderAlternatives(analysis.alternatives || []);
   improvedText.value = analysis.improved_text || "";
@@ -206,6 +235,79 @@ function renderScoreBreakdown(breakdown) {
   reliabilityNote.textContent = reliability
     ? `Aussagekraft ${reliability.level}: ${reliability.description}`
     : "Die Aussagekraft wird nach Textlänge und erkannten Personenbezügen eingeordnet.";
+}
+
+function buildHighlightRanges(local, findings, text) {
+  const ranges = [];
+  const addRange = (start, length, kind, title) => {
+    const safeStart = Number(start);
+    const safeLength = Number(length);
+    if (!Number.isFinite(safeStart) || !Number.isFinite(safeLength) || safeLength <= 0) {
+      return;
+    }
+    if (safeStart < 0 || safeStart >= text.length) {
+      return;
+    }
+    ranges.push({
+      start: safeStart,
+      end: Math.min(text.length, safeStart + safeLength),
+      kind,
+      title,
+    });
+  };
+
+  (local.potential_masculine_terms || []).forEach((item) => {
+    addRange(item.position, String(item.term || "").length, "term", item.suggestion || "kritische Personenbezeichnung");
+  });
+
+  (local.masculine_pronoun_terms || []).forEach((item) => {
+    addRange(item.position, String(item.term || "").length, "pronoun", item.suggestion || "kritischer Pronomenbezug");
+  });
+
+  (findings || []).forEach((finding) => {
+    const excerpt = String(finding.excerpt || "").trim();
+    if (!excerpt || excerpt.length < 3 || excerpt.length > 140) {
+      return;
+    }
+    const index = text.indexOf(excerpt);
+    if (index >= 0) {
+      addRange(index, excerpt.length, "finding", finding.suggestion || finding.explanation || "kritischer Befund");
+    }
+  });
+
+  return ranges
+    .sort((left, right) => left.start - right.start || right.end - left.end)
+    .reduce((accepted, range) => {
+      const previous = accepted.at(-1);
+      if (!previous || range.start >= previous.end) {
+        accepted.push(range);
+      }
+      return accepted;
+    }, []);
+}
+
+function renderSourceHighlights() {
+  const text = sourceText.value;
+  if (!activeHighlightRanges.length) {
+    sourceHighlights.innerHTML = escapeHtml(text) || " ";
+    syncEditorScroll();
+    return;
+  }
+
+  let cursor = 0;
+  const chunks = [];
+  activeHighlightRanges.forEach((range) => {
+    chunks.push(escapeHtml(text.slice(cursor, range.start)));
+    chunks.push(
+      `<mark class="highlight-${escapeHtml(range.kind)}" title="${escapeHtml(range.title)}">${escapeHtml(
+        text.slice(range.start, range.end),
+      )}</mark>`,
+    );
+    cursor = range.end;
+  });
+  chunks.push(escapeHtml(text.slice(cursor)) || " ");
+  sourceHighlights.innerHTML = chunks.join("");
+  syncEditorScroll();
 }
 
 function renderMethodology() {
@@ -308,7 +410,7 @@ function setStatus(text, state) {
 }
 
 function scoreColor(score) {
-  if (score >= 80) return "var(--blue-strong)";
+  if (score >= 80) return "var(--accent-strong)";
   if (score >= 55) return "var(--accent)";
   if (score >= 35) return "var(--amber)";
   return "var(--red)";
